@@ -21,31 +21,36 @@ const getContactById = async (contactId) => {
 const removeContact = async (contactId) => {
   const resp = await listContacts();
   const idx = resp.findIndex(({ id }) => id === contactId);
-  const newContacts = resp.filter((_, index) => index !== idx);
-  await fs.writeFile(contactsPath, JSON.stringify(newContacts));
-  return resp[idx];
+  const removed = resp[idx];
+  resp.splice(idx, 1);
+  await fs.writeFile(contactsPath, JSON.stringify(resp));
+  return removed;
 };
 
 const addContact = async (body) => {
   const { name, email, phone } = body;
   const resp = await listContacts();
   const add = { id: uuidv4(), name, email, phone };
-  const addContacts = [...resp, add];
-  await fs.writeFile(contactsPath, JSON.stringify(addContacts));
+  resp.push(add);
+  await fs.writeFile(contactsPath, JSON.stringify(resp));
   return add;
 };
 
 const updateContact = async (contactId, body) => {
-  const { name, email, phone } = body;
   const resp = await listContacts();
-  const updatedContacts = resp.map((item) => {
-    if (item.id === contactId) {
-      return { id: contactId, name, email, phone };
-    }
-    return item;
-  });
-  await fs.writeFile(contactsPath, JSON.stringify(updatedContacts));
-  return updatedContacts.find((item) => item.id === contactId);
+  const index = resp.findIndex(({ id }) => id === contactId);
+  if (index === -1) {
+    return null;
+  }
+  const oldContact = resp[index];
+  const newContact = { ...oldContact, ...body, id: contactId };
+  const newContacts = [
+    ...resp.slice(0, index),
+    newContact,
+    ...resp.slice(index + 1),
+  ];
+  await fs.writeFile(contactsPath, JSON.stringify(newContacts));
+  return newContact;
 };
 
 module.exports = {
