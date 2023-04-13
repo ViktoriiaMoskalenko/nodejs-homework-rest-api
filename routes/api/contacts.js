@@ -1,25 +1,69 @@
-const express = require('express')
+const express = require("express");
+const Joi = require("joi");
+const {
+  listContacts,
+  getContactById,
+  removeContact,
+  addContact,
+  updateContact,
+} = require("../../models/contacts.js");
 
-const router = express.Router()
+const router = express.Router();
 
-router.get('/', async (req, res, next) => {
-  res.json({ message: 'template message' })
-})
+const schema = Joi.object({
+  name: Joi.string(),
+  email: Joi.string().email(),
+  phone: Joi.string(),
+});
 
-router.get('/:contactId', async (req, res, next) => {
-  res.json({ message: 'template message' })
-})
+router.get("/", async (req, res, next) => {
+  const data = await listContacts();
+  res.json({ data });
+});
 
-router.post('/', async (req, res, next) => {
-  res.json({ message: 'template message' })
-})
+router.get("/:contactId", async (req, res, next) => {
+  const { contactId } = req.params;
+  const contact = await getContactById(contactId);
+  if (!contact) {
+    return res.status(404).json({ message: "Contact not found" });
+  }
+  res.json({ contact });
+});
 
-router.delete('/:contactId', async (req, res, next) => {
-  res.json({ message: 'template message' })
-})
+router.post("/", async (req, res, next) => {
+  const { error, value } = schema.validate(req.body);
 
-router.put('/:contactId', async (req, res, next) => {
-  res.json({ message: 'template message' })
-})
+  if (error) {
+    return res.status(400).json({ error: "missing required name field" });
+  }
 
-module.exports = router
+  const newContact = await addContact(value);
+  res.status(201).json(newContact);
+});
+
+router.delete("/:contactId", async (req, res, next) => {
+  const { contactId } = req.params;
+  const contact = await removeContact(contactId);
+  if (!contact) {
+    return res.status(404).json({ message: "Contact not found" });
+  }
+  res.json({ message: "contact deleted" });
+});
+
+router.put("/:contactId", async (req, res, next) => {
+  const { contactId } = req.params;
+  const { body } = req;
+  const { error, value } = schema.validate(body);
+
+  if (error) {
+    return res.status(400).json({ error: "missing fields" });
+  }
+
+  const newContact = await updateContact(contactId, value);
+  if (!newContact) {
+    return res.status(404).json({ message: "Contact not found" });
+  }
+  res.json(newContact);
+});
+
+module.exports = router;
