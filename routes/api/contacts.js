@@ -6,6 +6,7 @@ const {
   removeContact,
   addContact,
   updateContact,
+  updateStatusContact,
 } = require("../../models/contacts.js");
 
 const router = express.Router();
@@ -14,11 +15,12 @@ const schema = Joi.object({
   name: Joi.string(),
   email: Joi.string().email(),
   phone: Joi.string(),
+  favorite: Joi.boolean(),
 });
 
 router.get("/", async (req, res, next) => {
   const data = await listContacts();
-  res.json({ data });
+  res.json(data);
 });
 
 router.get("/:contactId", async (req, res, next) => {
@@ -27,7 +29,7 @@ router.get("/:contactId", async (req, res, next) => {
   if (!contact) {
     return res.status(404).json({ message: "Contact not found" });
   }
-  res.json({ contact });
+  res.json(contact);
 });
 
 router.post("/", async (req, res, next) => {
@@ -62,6 +64,21 @@ router.put("/:contactId", async (req, res, next) => {
   const newContact = await updateContact(contactId, value);
   if (!newContact) {
     return res.status(404).json({ message: "Contact not found" });
+  }
+  res.json(newContact);
+});
+
+router.patch("/:contactId/favorite", async (req, res, next) => {
+  const { contactId } = req.params;
+  const { body } = req;
+
+  if (!body || typeof body.favorite === "undefined") {
+    return res.status(400).json({ message: "missing field favorite" });
+  }
+
+  const newContact = await updateStatusContact(contactId, body);
+  if (!newContact) {
+    return res.status(404).json({ message: "Not found" });
   }
   res.json(newContact);
 });
