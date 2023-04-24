@@ -6,34 +6,41 @@ const schema = Joi.object({
   email: Joi.string().email(),
   phone: Joi.string(),
   favorite: Joi.boolean(),
+  owner: Joi.string(),
 });
 
 const listContacts = async (req, res, next) => {
-  const { favorite, page = 1, limit = 2 } = req.query;
-
   try {
-    let contacts;
+    const { page = 1, limit = 20, favorite } = req.query;
+    const skip = (page - 1) * limit;
 
-    const startIndex = (page - 1) * limit;
-    const endIndex = page * limit;
-
-    if (favorite) {
-      contacts = await Contact.find({ favorite: true })
-        .skip(startIndex)
-        .limit(limit);
-    } else {
-      contacts = await Contact.find().skip(startIndex).limit(limit);
+    let query = { owner: req.user.id };
+    if (favorite === "true") {
+      query.favorite = true;
+    } else if (favorite === "false") {
+      query.favorite = false;
     }
 
-    res.json(contacts);
-  } catch (err) {
-    next(err);
+    const totalContacts = await Contact.countDocuments(query);
+    const contacts = await Contact.find(query).skip(skip).limit(limit);
+
+    return res.json({
+      totalContacts,
+      currentPage: parseInt(page),
+      totalPages: Math.ceil(totalContacts / limit),
+      contacts,
+    });
+  } catch (error) {
+    return next(error);
   }
 };
 
 const getContactById = async (req, res, next) => {
   const { contactId } = req.params;
-  const contact = await Contact.findById(contactId);
+  const contact = await Contact.findOne({
+    _id: contactId,
+    owner: req.user.id,
+  });
   if (!contact) {
     return res.status(404).json({ message: "Contact not found" });
   }
@@ -42,7 +49,10 @@ const getContactById = async (req, res, next) => {
 
 const removeContact = async (req, res, next) => {
   const { contactId } = req.params;
-  const contact = await Contact.findByIdAndDelete(contactId);
+  const contact = await Contact.findOneAndDelete({
+    _id: contactId,
+    owner: req.user.id,
+  });
   if (!contact) {
     return res.status(404).json({ message: "Contact not found" });
   }
@@ -56,7 +66,12 @@ const addContact = async (req, res, next) => {
     return res.status(400).json({ error: "missing required name field" });
   }
 
-  const newContact = await Contact.create({ name, email, phone });
+  const newContact = await Contact.create({
+    name,
+    email,
+    phone,
+    owner: req.user.id,
+  });
   res.status(201).json(newContact);
 };
 
@@ -69,9 +84,13 @@ const updateContact = async (req, res, next) => {
     return res.status(400).json({ error: "missing fields" });
   }
 
-  const newContact = await Contact.findByIdAndUpdate(contactId, body, {
-    new: true,
-  });
+  const newContact = await Contact.findOneAndUpdate(
+    { _id: contactId, owner: req.user.id },
+    value,
+    {
+      new: true,
+    }
+  );
   if (!newContact) {
     return res.status(404).json({ message: "Contact not found" });
   }
@@ -86,8 +105,8 @@ const updateStatusContact = async (req, res, next) => {
     return res.status(400).json({ message: "missing field favorite" });
   }
 
-  const newContact = await await Contact.findByIdAndUpdate(
-    contactId,
+  const newContact = await await Contact.findOneAndUpdate(
+    { _id: contactId, owner: req.user.id },
     { favorite: body.favorite },
     {
       new: true,
