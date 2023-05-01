@@ -6,6 +6,8 @@ const {
   logout,
   current,
   subscription,
+  avatar,
+  avatarUpload,
 } = require("../../controllers/auth");
 const authMiddleware = require("../../middleware/auth");
 
@@ -21,5 +23,7 @@ router.post("/logout", authMiddleware, logout);
 router.get("/current", authMiddleware, current);
 
 router.patch("/", authMiddleware, subscription);
+
+router.patch("/avatars", authMiddleware, avatarUpload, avatar);
 
 module.exports = router;
