@@ -20,9 +20,14 @@ const usersShema = new Schema(
       type: String,
       default: null,
     },
+    avatarURL: {
+      type: String,
+      default: "",
+    },
   },
   { versionKey: false }
 );
+
 const User = model("users", usersShema);
 
 module.exports = {

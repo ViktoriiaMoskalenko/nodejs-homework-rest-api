@@ -1,13 +1,22 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const Joi = require("joi");
+const gravatar = require("gravatar");
+const jimp = require("jimp");
+const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
 
 const { User } = require("../models/users");
+
+const { promisify } = require("util");
+const moveFile = promisify(require("fs").rename);
 
 const userSchema = Joi.object({
   name: Joi.string().required(),
   email: Joi.string().email().required(),
   password: Joi.string().min(6).required(),
+  avatarURL: Joi.string(),
 });
 const loginSchema = Joi.object({
   email: Joi.string().email().required(),
@@ -21,7 +30,7 @@ async function register(req, res, next) {
       return res.status(400).json({ message: error.details[0].message });
     }
 
-    const { name, email, password, subscription } = req.body;
+    const { name, email, password } = req.body;
 
     const user = await User.findOne({ email });
 
@@ -31,11 +40,12 @@ async function register(req, res, next) {
 
     const hash = await bcrypt.hash(password, 10);
 
-    await User.create({ name, email, password: hash });
+    const avatar = gravatar.url(email, { s: "250", r: "pg", d: "mp" });
+    await User.create({ name, email, password: hash, avatarURL: avatar });
 
     return res.status(201).json({
       message: "User registered successfully",
-      user: { email },
+      user: { email, avatar },
     });
   } catch (error) {
     return next(error);
@@ -127,4 +137,67 @@ async function subscription(req, res, next) {
   res.json(user);
 }
 
-module.exports = { register, login, logout, current, subscription };
+const avatarStorage = multer.diskStorage({
+  destination: path.join(__dirname, "public", "avatars"),
+  filename: (req, file, cb) => {
+    const ext = path.parse(file.originalname).ext;
+    cb(null, `${req.user.id}${ext}`);
+  },
+});
+
+const avatarUpload = multer({
+  storage: avatarStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.includes("image")) {
+      cb(null, true);
+      return;
+    }
+    cb(null, false);
+  },
+}).single("avatar");
+
+async function avatar(req, res, next) {
+  try {
+    if (!req.file) {
+      res.status(400).json({ message: "No file uploaded" });
+      return;
+    }
+    const image = await jimp.read(req.file.path);
+    await image.resize(250, 250);
+    const avatarName = `${req.user.id}.jpg`;
+    const avatarPath = `public/avatars/${avatarName}`;
+
+    if (!fs.existsSync("public/avatars")) {
+      fs.mkdirSync("public/avatars");
+    }
+
+    await image.writeAsync(avatarPath);
+
+    const avatarURL = `/avatars/${avatarName}`;
+    await User.findByIdAndUpdate(req.user.id, { avatarURL });
+
+    await moveFile(req.file.path, `public/avatars/${avatarName}`);
+
+    res.json({ avatarURL });
+  } catch (error) {
+    console.error(error);
+
+    if (req.file) {
+      await fs.promises.unlink(req.file.path);
+    }
+
+    res.status(500).json({ message: "Server error" });
+  }
+}
+
+module.exports = {
+  register,
+  login,
+  logout,
+  current,
+  subscription,
+  avatar,
+  avatarUpload,
+  avatarStorage,
+};
