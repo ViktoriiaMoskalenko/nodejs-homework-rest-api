@@ -6,8 +6,10 @@ const jimp = require("jimp");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
+const { v4: uuidv4 } = require("uuid");
 
 const { User } = require("../models/users");
+const { transporter } = require("../helpers/sendEmail");
 
 const { promisify } = require("util");
 const moveFile = promisify(require("fs").rename);
@@ -41,12 +43,74 @@ async function register(req, res, next) {
     const hash = await bcrypt.hash(password, 10);
 
     const avatar = gravatar.url(email, { s: "250", r: "pg", d: "mp" });
-    await User.create({ name, email, password: hash, avatarURL: avatar });
+    const verificationToken = uuidv4();
+
+    await User.create({
+      name,
+      email,
+      password: hash,
+      avatarURL: avatar,
+      verificationToken,
+    });
+
+    transporter(name, req.headers.host, verificationToken);
 
     return res.status(201).json({
       message: "User registered successfully",
       user: { email, avatar },
     });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function verify(req, res, next) {
+  try {
+    const { verificationToken } = req.params;
+
+    const user = await User.findOne({ verificationToken });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await User.findByIdAndUpdate(user._id, {
+      verify: true,
+      verificationToken: "",
+    });
+
+    return res.status(200).json({ message: "Email verified successfully" });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function resendVerificationEmail(req, res, next) {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "missing required field email" });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (user.verify) {
+      return res
+        .status(400)
+        .json({ message: "Verification has already been passed" });
+    }
+
+    const verificationToken = uuidv4();
+
+    await User.findByIdAndUpdate(user._id, { verificationToken });
+
+    transporter(user.name, req.headers.host, verificationToken);
+
+    return res.status(200).json({ message: "Verification email sent" });
   } catch (error) {
     return next(error);
   }
@@ -62,6 +126,12 @@ async function login(req, res, next) {
     }
 
     const user = await User.findOne({ email });
+    console.log(user);
+
+    if (!user.verify) {
+      throw HttpError(401, "User is not verified"); // "Email invalid"
+    }
+
     if (!user) {
       return res.status(401).json({ message: "Email or password is wrong" });
     }
@@ -200,4 +270,6 @@ module.exports = {
   avatar,
   avatarUpload,
   avatarStorage,
+  verify,
+  resendVerificationEmail,
 };

@@ -8,6 +8,8 @@ const {
   subscription,
   avatar,
   avatarUpload,
+  verify,
+  resendVerificationEmail,
 } = require("../../controllers/auth");
 const authMiddleware = require("../../middleware/auth");
 
@@ -25,5 +27,9 @@ router.get("/current", authMiddleware, current);
 router.patch("/", authMiddleware, subscription);
 
 router.patch("/avatars", authMiddleware, avatarUpload, avatar);
+
+router.get("/verify/:verificationToken", verify);
+
+router.post("/verify", jsonParser, resendVerificationEmail);
 
 module.exports = router;

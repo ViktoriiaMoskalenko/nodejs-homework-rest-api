@@ -1,22 +1,37 @@
 require("dotenv").config();
 const nodemailer = require("nodemailer");
 
-var transport = nodemailer.createTransport({
-  host: "sandbox.smtp.mailtrap.io",
-  port: 2525,
-  auth: {
-    user: process.env.MAILTRAP_USER,
-    pass: process.env.MAILTRAP_PASSWORD,
-  },
-});
+function transporter(name, host, verificationToken) {
+  var transport = nodemailer.createTransport({
+    host: "sandbox.smtp.mailtrap.io",
+    port: 2525,
+    auth: {
+      user: process.env.MAILTRAP_USER,
+      pass: process.env.MAILTRAP_PASSWORD,
+    },
+  });
 
-transport
-  .sendMail({
-    to: "vika01mos@gmail.com",
-    from: "vika01mos@gmail.com",
-    subject: "Hello",
-    text: "Vika",
-    html: "<strong>Moskalenko</strong>",
-  })
-  .then((res) => console.log(res))
-  .catch((error) => console.error(error));
+  transport.sendMail(
+    {
+      from: "vika01mos@gmail.com",
+      to: "vika01mos@gmail.com",
+      subject: "Verify your email address",
+      html: `
+        <p>Hello, ${name}!</p>
+        <p>Please follow this link to verify your email address:</p>
+        <p><a href="http://${host}/api/users/verify/${verificationToken}">Verify your email address</a></p>
+      `,
+    },
+    function (error, info) {
+      if (error) {
+        console.log(error);
+      } else {
+        console.log("Email sent: " + info.response);
+      }
+    }
+  );
+}
+
+module.exports = {
+  transporter,
+};
