@@ -59,8 +59,8 @@ async function register(req, res, next) {
       message: "User registered successfully",
       user: { email, avatar },
     });
-  } catch (error) {
-    return next(error);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
   }
 }
 
@@ -80,7 +80,7 @@ async function verify(req, res, next) {
 
     return res.status(200).json({ message: "Email verified successfully" });
   } catch (error) {
-    return next(error);
+    return res.status(500).json({ message: error.message });
   }
 }
 
@@ -104,7 +104,7 @@ async function resendVerificationEmail(req, res, next) {
         .json({ message: "Verification has already been passed" });
     }
 
-    const verificationToken = uuidv4();
+    const { verificationToken } = user;
 
     await User.findByIdAndUpdate(user._id, { verificationToken });
 
@@ -126,14 +126,13 @@ async function login(req, res, next) {
     }
 
     const user = await User.findOne({ email });
-    console.log(user);
-
-    if (!user.verify) {
-      throw HttpError(401, "User is not verified"); // "Email invalid"
-    }
 
     if (!user) {
       return res.status(401).json({ message: "Email or password is wrong" });
+    }
+
+    if (!user.verify) {
+      return res.status(401).json({ message: "User is not verified" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
@@ -147,15 +146,16 @@ async function login(req, res, next) {
       { expiresIn: "1h" }
     );
 
-    user.token = token;
-    await user.save();
+    await User.findByIdAndUpdate(user._id, {
+      token,
+    });
 
     return res.status(200).json({
       token,
       user: { email: user.email, subscription: user.subscription },
     });
   } catch (err) {
-    return next(err);
+    return res.status(500).json({ message: err.message });
   }
 }
 
@@ -170,7 +170,7 @@ async function logout(req, res, next) {
     user.token = null;
     await user.save();
 
-    return res.status(204);
+    return res.sendStatus(204);
   } catch (err) {
     return res.status(500).json({ message: "Internal Server Error" });
   }
